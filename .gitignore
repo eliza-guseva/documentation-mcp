@@ -1,0 +1,8 @@
+retrieved_data/
+**/__pycache__
+*.html
+*.log
+*.json
+venv
+*.ipynb
+.DS_Store

@@ -1,0 +1,16 @@
+{
+  "github_token": "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN",
+  "embed_with_openai": true,
+  "openai_api_key": "YOUR_OPENAI_TOKEN",
+  "openai_embedding_model": "text-embedding-3-small",
+  "huggingface_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "local_storage_path": "retrieved_data",
+  "repositories": {
+    "pydantic_ai": ["https://github.com/pydantic/pydantic-ai"]
+  },
+  "documentation_urls": {
+    "pydantic_ai": ["https://ai.pydantic.dev/"]
+  },
+  "update_interval_days": 4,
+  "log_file": "data_collection.log"
+} 
