@@ -91,60 +91,137 @@ def response_node(state: BaseAgentState) -> BaseAgentState:
     return {"messages": messages + [response]}
 
 
-def _decomposition_prompt_template():
+def _router_prompt_template():
     return """
-    You are an expert query analyzer. 
-    Your task is to process a user's query and decide if it should be broken down into multiple sub-queries for a vector database, or if it should be rephrased for optimal search.
-    The queries are used to search a vector database of PydanticAI documentation. 
-    Each chunk in the database is either a code example or a section of the documentation.
-    The goal is to find the most relevant chunks for the query.
-    You MUST respond with a JSON object containing a single key "queries" whose value is a list of strings.
-    - If splitting the query, provide the sub-queries in the list.
-    Example for "how to stream structured output with agents": {{"queries": ["streaming structured output", "streaming in agents"]}}
-    - If rephrasing or using the original query, provide a single query in the list.
-    Example for "how to write a simple agent": {{"queries": ["tutorial for creating a basic PydanticAI agent"]}}
-    - If the query is relatively simple and direct, generate 1 query (possibly rephrased for keywords).
+    You are an expert query analyzer and conversational assistant.
+    Your task is to process a user's query in the context of the recent conversation history and decide on the best course of action.
+    The ultimate goal is to answer questions about PydanticAI documentation. 
+    Each chunk in the documentation database is either a code example or a section of the documentation.
+
+    You will be given the user's current query and the last few turns of the conversation history.
+
+    Analyze the query and history according to these steps:
+
+    1.  **Follow-up Detection:**
+        *   Is the current user query a direct follow-up to the immediately preceding AI's response or user's question in the provided history?
+        *   Can the query be fully and accurately answered using ONLY the information present in the provided conversation history (specifically, the last AI response)?
+        *   If YES, your decision should be "DIRECT_ANSWER".
+
+    2.  **Bad Query Detection (if not a direct answer from history):**
+        *   Is the query too vague, ambiguous, nonsensical, or clearly outside the scope of PydanticAI documentation (e.g., asking about unrelated topics)?
+        *   Be lenient. Err on the side of DECOMPOSE and not CLARIFY.
+        *   Is the query too short or lacks sufficient detail to perform a meaningful search?
+        *   If YES, your decision should be "CLARIFY".
+
+    3.  **Decomposition/Rephrasing for Search (if not a direct answer and not a bad query):**
+        *   The query is likely a new, valid question that requires searching the PydanticAI documentation.
+        *   Rephrase or break down the query into one or more sub-queries optimized for a vector database search.
+        *   The goal is to find the most relevant chunks for the query.
+        *   If the query is relatively simple and direct, generate 1 query (possibly rephrased for keywords).
+        *   Your decision should be "DECOMPOSE".
+
+    You MUST respond with a JSON object adhering to the following structure:
+
+    {{
+        "decision_type": "DIRECT_ANSWER" | "CLARIFY" | "DECOMPOSE",
+        "payload": {{
+            "direct_answer_content": "...", // Present if decision_type is DIRECT_ANSWER. This is the complete answer to the user's query.
+            "clarification_question": "...", // Present if decision_type is CLARIFY. This is the question to ask the user for more details.
+            "search_queries": ["...", "..."]     // Present if decision_type is DECOMPOSE. List of queries for the vector database.
+        }},
+        "original_query": "..." // Always include the original user query you processed.
+    }}
+
+    Examples:
+
+    Input History:
+    User: "How do I use Pydantic Models with PydanticAI?"
+    AI: "PydanticAI is designed to work seamlessly with Pydantic Models. You define your data structure as a Pydantic Model, and PydanticAI can then parse and validate LLM outputs against this model. For instance, `class User(BaseModel): name: str; age: int`..."
+    Current User Query: "What about nested models?"
+
+    Output JSON:
+    {{
+        "decision_type": "DIRECT_ANSWER",
+        "payload": {{
+            "direct_answer_content": "Yes, PydanticAI supports nested Pydantic Models just like Pydantic itself. You can define a Pydantic Model that includes fields typed with other Pydantic Models, and PydanticAI will handle the parsing and validation recursively."
+        }},
+        "original_query": "What about nested models?"
+    }}
+
+
+    Input History: (empty or unrelated)
+    Current User Query: "invoke"
+
+    Output JSON:
+    {{
+        "decision_type": "CLARIFY",
+        "payload": {{
+            "clarification_question": "Could you please be more specific about what you mean by 'invoke' in the context of PydanticAI? Are you referring to invoking LLMs, specific functions, or something else?"
+        }},
+        "original_query": "invoke."
+    }}
+
+
+    Input History: (empty or unrelated)
+    Current User Query: "how to stream structured output with agents and also how to define custom extraction logic"
+
+    Output JSON:
+    {{
+        "decision_type": "DECOMPOSE",
+        "payload": {{
+            "search_queries": ["streaming structured output with PydanticAI agents", "custom data extraction logic PydanticAI"]
+        }},
+        "original_query": "how to stream structured output with agents and also how to define custom extraction logic"
+    }}
+
+    Consider the provided conversation history carefully when making your decision.
     """
     
     
-def decomposition_node(state: MultiQueryAgentState) -> Dict[str, Any]:
+def router_node(state: MultiQueryAgentState) -> Dict[str, Any]:
+    history = state["messages"][-min(len(state["messages"]), 4):]
     user_query_message = state["messages"][-1]
+    messages_to_add = []
     if not isinstance(user_query_message, HumanMessage):
         logger.error("Last message is not a HumanMessage, cannot decompose.")
-        # Fallback: use empty to avoid breaking flow
-        original_query = ""
-        search_queries = []
+        return {
+            "decision_type": "CLARIFY",
+            "payload": {
+                "clarification_question": "I am sorry! Something went horribly wrong. Please try again later. Or maybe even better: fix me! :D"
+            },
+            "original_query": ""
+        }
     else:
         original_query = user_query_message.content
     
     logger.info(f"Original query for decomposition: \"{original_query}\"")
 
-    if not original_query: # If original query is empty (e.g. from fallback above)
-        return {"search_queries": [], "original_query": original_query}
 
     llm = ChatOpenAI(model="gpt-4o")
-    messages_to_add = []
     
     try:
         response = llm.invoke(
             [
-                SystemMessage(content=_decomposition_prompt_template()),
+                SystemMessage(content=_router_prompt_template()),
+                *history,
                 HumanMessage(content=f"The user's query is: \"{original_query}\"")
             ],
             response_format={"type": "json_object"} # Request JSON output
         )
         query_data = json.loads(response.content)
-        search_queries = query_data.get("queries", [])
-        logger.warning(f"State messages: {state['messages']}")
-
-        if not search_queries or not isinstance(search_queries, list) or not all(isinstance(q, str) for q in search_queries):
-            logger.warning(f"LLM did not return a valid list of strings for queries. Response: {response.content}. Falling back to original query.")
-            search_queries = [original_query]
-            messages_to_add.append(AIMessage(content=f"Searching: '{original_query}'"))
-        else:
-            logger.info(f"Decomposed/rephrased queries: {search_queries}")
+        search_queries = []
+        
+        if query_data["decision_type"] == "DIRECT_ANSWER":
+            messages_to_add.append(AIMessage(content=query_data["payload"]["direct_answer_content"]))
+        elif query_data["decision_type"] == "CLARIFY":
+            messages_to_add.append(AIMessage(content=query_data["payload"]["clarification_question"]))
+        elif query_data["decision_type"] == "DECOMPOSE":
+            search_queries = query_data["payload"]["search_queries"]
             for query in search_queries:
                 messages_to_add.append(AIMessage(content=f"Searching: '{query}'"))
+        else:
+            raise ValueError(f"Invalid decision type: {query_data['decision_type']}")
+        
             
     except (json.JSONDecodeError, KeyError, AttributeError) as e:
         logger.error(f"Failed to parse decomposed queries from LLM. Error: {e}. Content: '{getattr(response, 'content', 'N/A')}'. Falling back to original query.")
@@ -153,16 +230,16 @@ def decomposition_node(state: MultiQueryAgentState) -> Dict[str, Any]:
         logger.error(f"An unexpected error occurred during query decomposition: {e}. Falling back to original query.")
         search_queries = [original_query]
         
-    logger.warning(f"Messages to add: {messages_to_add}")
-    logger.warning(f"State messages: {state['messages']}")
+
     return {
-        "search_queries": search_queries, 
+        "messages": messages_to_add,
         "original_query": original_query,
-        "messages": messages_to_add
+        "search_queries": search_queries,
+        "decision_type": query_data["decision_type"]
     }
 
 
-def parallel_retrieval_node(state: MultiQueryAgentState) -> Dict[str, Any]:
+def parallel_retrieval_node(state: MultiQueryAgentState) -> Dict[str, Any]: 
     queries = state.get("search_queries", [])
     original_query = state.get("original_query", "")
     
@@ -199,7 +276,6 @@ def parallel_retrieval_node(state: MultiQueryAgentState) -> Dict[str, Any]:
             unique_results.append(doc)
             seen_content.add(content)
             
-    logger.warning(f"All messages: {state['messages']}")
     logger.info(f"Aggregated {len(all_results)} raw results into {len(unique_results)} unique documents for original query: '{original_query}'.")
     return {"retrieved_docs": unique_results}
 

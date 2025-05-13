@@ -5,11 +5,9 @@ class BaseAgentState(TypedDict):
     """
     Base state for all agent states
     - messages: List of messages
-    - tools_output: Dictionary of tools output
     - retrieved_docs: List of retrieved documents
     """
     messages: Annotated[List[Any], operator.add]
-    tools_output: Dict[str, Any]
     retrieved_docs: List[Dict[str, Any]]
     
     
@@ -20,9 +18,11 @@ class MultiQueryAgentState(BaseAgentState):
     then it retrieves relevant documents for each sub-query.
     - original_query: To store the initial query for context if needed
     - search_queries: Decomposed/rephrased queries
+    - decision_type: Type of decision made by the router
     """
     original_query: str # To store the initial query for context if needed
     search_queries: List[str] # Decomposed/rephrased queries
+    decision_type: str # Type of decision made by the router
     
     
     
