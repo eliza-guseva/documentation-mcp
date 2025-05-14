@@ -1,68 +1,16 @@
 import re
-import ast
 import os
+import copy
 import json
 import logging
 import hashlib
 from typing import List, Dict, Any
 from langchain_core.documents import Document
+from langchain_text_splitters import MarkdownHeaderTextSplitter
 
 
 # Get a logger instance for this module
 logger = logging.getLogger(__name__)
-
-
-def extract_symbols_from_code(code_string, language="python"):
-    """
-    Extracts potential symbols (functions, classes) from a code block.
-    Uses AST parsing for Python and basic regex for others.
-    """
-    symbols = []
-    language_lower = language.lower()
-
-    if language_lower in ["python", "py"]:
-        try:
-            tree = ast.parse(code_string)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef):
-                    symbols.append(node.name)
-                elif isinstance(node, ast.ClassDef):
-                    symbols.append(node.name)
-        except SyntaxError:
-
-            symbols.extend(re.findall(r'^\\s*(?:def|class)\\s+(\\w+)', code_string, re.MULTILINE))
-    else:
-        symbols.extend(re.findall(r'^\\s*(?:def|class|function)\\s+(\\w+)', code_string, re.MULTILINE))
-
-    return list(set(symbols)) # Return unique symbols
-
-
-def extract_inline_code_symbols(text: str) -> List[str]:
-    """
-    Extract symbols from inline code blocks (text surrounded by backticks).
-    
-    Args:
-        text: The text to extract inline code symbols from.
-        
-    Returns:
-        List of unique symbols found in inline code blocks.
-    """
-    # Match text surrounded by single backticks (but not triple backticks)
-    inline_code_pattern = r'(?<!`)`([^`\n]+)`(?!`)'
-    matches = re.findall(inline_code_pattern, text)
-    
-    # Filter out common markdown formatting symbols
-    filtered_symbols = []
-    for match in matches:
-        # Skip if it's just a single character or very short
-        if len(match.strip()) <= 1:
-            continue
-        # Skip if it contains only symbols
-        if re.match(r'^[^\w]*$', match.strip()):
-            continue
-        filtered_symbols.append(match.strip())
-        
-    return list(set(filtered_symbols))
 
 
 def _is_not_line_number(content: str) -> bool:
@@ -148,12 +96,11 @@ def split_text_and_code(doc_content: str) -> List[Dict[str, Any]]:
     for i in range(1, len(parts)):
         if i % 2 == 1:  # Odd indices are code blocks
             code_content = '\n'.join(parts[i].replace("\\n", "\n").split("\n")[1:]).strip()
-            symbols = extract_symbols_from_code(code_content)
             # Create a code chunk
             code_chunk = {
                 "content": f"```\n{code_content}\n```",  # Re-add backticks for markdown formatting
                 "language": "python", 
-                "symbols": symbols,
+                "symbols": [],
                 "type": "code"
             }
             all_parts.append(code_chunk)
@@ -304,6 +251,39 @@ def chunk_json_file(file_path: str) -> List[Document]:
         logger.error(f"Error processing {file_path}: {str(e)}", exc_info=True)
         return []
 
+
+def chunk_markdown_file(file_path: str) -> List[Document]:
+    """
+    Process a single markdown file, extracting content and metadata,
+    and chunking it into Document objects.
+    """
+    headers_to_split_on = [
+        ("#", "header_1"),
+        ("##", "header_2"),
+        ("###", "header_3"),
+    ]
+
+    # Initialize the splitter
+    markdown_splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=headers_to_split_on
+    )
+
+# Split the text
+    
+    json_data = json.load(open(file_path, 'r', encoding='utf-8'))
+    text = json_data['page_content'].replace("\\n", "\n")
+    metadata = json_data['metadata']
+    splits = markdown_splitter.split_text(text)
+    for (position, chunk) in enumerate(splits):
+        logger.debug(f"Chunk {position} of {len(splits)}")
+        metadata['position'] = position
+        metadata['content_type'] = 'text'
+        metadata['content_hash'] = hashlib.sha256(chunk.page_content.encode('utf-8')).hexdigest()
+        metadata['source'] = 'https://ai.pydantic.dev/llms-full.txt'
+        chunk.metadata = copy.deepcopy(metadata)
+    return splits
+
+
 def process_directory(directory_path: str) -> List[Document]:
     """
     Recursively processes all JSON files in the given directory and its subdirectories.
@@ -325,7 +305,11 @@ def process_directory(directory_path: str) -> List[Document]:
             if file.endswith('.json'):
                 file_path = os.path.join(root, file)
                 # Process the file and add its chunks to our collection
-                file_documents = chunk_json_file(file_path)
+                if file == "llms-fulltxt.json":
+                    logger.info(f"Chunking markdown file: {file_path}")
+                    file_documents = chunk_markdown_file(file_path)
+                else:
+                    file_documents = chunk_json_file(file_path)
                 all_documents.extend(file_documents)
     
     logger.info(f"Finished processing {directory_path}. Total documents generated: {len(all_documents)}")

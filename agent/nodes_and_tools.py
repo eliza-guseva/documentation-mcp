@@ -5,7 +5,7 @@ from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from config.config import ConfigManager
 
-from vectorizing_and_retrieval.query_vector_graph import retrieve_from_group_with_graph
+from vectorizing_and_retrieval.query_vector_graph import retrieve_from_group_with_graph, retrieve_from_group
 from config.utils import get_logger
 from agent.agent_states import BaseAgentState, MultiQueryAgentState
 
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 
 def pydantic_ai_retrieval_tool(query: str, k: int = 5) -> List[Dict[str, Any]]:
-    results = retrieve_from_group_with_graph('pydantic_ai', query, k, config)
+    results = retrieve_from_group('pydantic_ai', query, k, config)
     formatted_docs = []
     for doc in results:
         formatted_docs.append({

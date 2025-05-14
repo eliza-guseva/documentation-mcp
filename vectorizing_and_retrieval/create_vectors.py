@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from vectorizing_and_retrieval.chunking import chunk_json_file
+from vectorizing_and_retrieval.chunking import chunk_json_file, chunk_markdown_file
 from data_collection.fetcher import url_to_source_identifier
 import logging
 from langchain_community.vectorstores import FAISS
@@ -217,10 +217,13 @@ def _process_file(
     """
     Chunks a JSON file and returns the source and list of documents.
     """
-    file_path = os.path.join(root, file_path)
-    logger.debug(f"Processing file: {file_path}")
-    # Process the file and add its chunks to our collection
-    file_documents = chunk_json_file(file_path)
+    full_path = os.path.join(root, file_path)
+    if file_path == "llms-fulltxt.json":
+        logger.info(f"Processing markdown file: {file_path}")
+        file_documents = chunk_markdown_file(full_path)
+    else:
+        # Process the file and add its chunks to our collection
+        file_documents = chunk_json_file(full_path)
     if not file_documents:
         logger.warning(f"No documents generated from file: {file_path}. Skipping.")
         return None, None
