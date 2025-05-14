@@ -15,12 +15,12 @@ logger = get_logger(__name__)
 PROJECT_NAME = os.getenv("LANGSMITH_PROJECT")
 logger.info(f"Project name: {PROJECT_NAME}")
 
+
 def process_missing_feedback():
     """Add feedback to recent runs without feedback"""
 
     client = Client(api_key=os.getenv("LANGSMITH_API_KEY"))
     
-    # Get runs from your specific project
     runs = list(client.list_runs(
         project_name=PROJECT_NAME,
         run_type="chain",
@@ -32,7 +32,6 @@ def process_missing_feedback():
         run.extra.get('metadata').get('tags', [])
     ]
     
-    # logger.info(f"{runs[0]}")
     
     logger.info(f"Found {len(runs_needing_eval)} runs needing evaluation")
     
