@@ -87,7 +87,6 @@ def response_node(state: BaseAgentState) -> BaseAgentState:
         response = AIMessage(content=f"I am sorry! Something went horribly wrong. Please try again later. Or maybe even better: fix me! :D")
     
     # Return the AI message
-    logger.warning(f"Response node messages: {messages + [response]}")
     return {"messages": messages + [response]}
 
 
@@ -179,9 +178,9 @@ def _router_prompt_template():
     
     
 def router_node(state: MultiQueryAgentState) -> Dict[str, Any]:
-    history = state["messages"][-min(len(state["messages"]), 4):]
+    history = state["messages"][-min(len(state["messages"]), 6):]
     user_query_message = state["messages"][-1]
-    messages_to_add = []
+    messages_to_add = history
     if not isinstance(user_query_message, HumanMessage):
         logger.error("Last message is not a HumanMessage, cannot decompose.")
         return {
@@ -197,7 +196,7 @@ def router_node(state: MultiQueryAgentState) -> Dict[str, Any]:
     logger.info(f"Original query for decomposition: \"{original_query}\"")
 
 
-    llm = ChatOpenAI(model="gpt-4o")
+    llm = ChatOpenAI(model="gpt-4o", temperature=0)
     
     try:
         response = llm.invoke(
@@ -226,9 +225,21 @@ def router_node(state: MultiQueryAgentState) -> Dict[str, Any]:
     except (json.JSONDecodeError, KeyError, AttributeError) as e:
         logger.error(f"Failed to parse decomposed queries from LLM. Error: {e}. Content: '{getattr(response, 'content', 'N/A')}'. Falling back to original query.")
         search_queries = [original_query]
+        return {
+            "messages": messages_to_add,
+            "original_query": original_query,
+            "search_queries": search_queries,
+            "decision_type": "DECOMPOSE"
+        }
     except Exception as e:
         logger.error(f"An unexpected error occurred during query decomposition: {e}. Falling back to original query.")
         search_queries = [original_query]
+        return {
+            "messages": messages_to_add,
+            "original_query": original_query,
+            "search_queries": search_queries,
+            "decision_type": "DECOMPOSE"
+        }
         
 
     return {
@@ -279,3 +290,6 @@ def parallel_retrieval_node(state: MultiQueryAgentState) -> Dict[str, Any]:
     logger.info(f"Aggregated {len(all_results)} raw results into {len(unique_results)} unique documents for original query: '{original_query}'.")
     return {"retrieved_docs": unique_results}
 
+
+def return_output_node(state: MultiQueryAgentState) -> MultiQueryAgentState:
+    return {"messages": state["messages"]}

@@ -7,7 +7,7 @@ class BaseAgentState(TypedDict):
     - messages: List of messages
     - retrieved_docs: List of retrieved documents
     """
-    messages: Annotated[List[Any], operator.add]
+    messages: List[Any]
     retrieved_docs: List[Dict[str, Any]]
     
     
