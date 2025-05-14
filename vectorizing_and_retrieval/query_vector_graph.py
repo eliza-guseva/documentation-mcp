@@ -160,7 +160,8 @@ def _augment_scores_with_graph(
     doc_ids: set, 
     loaded_graphs: Dict[str, Optional[nx.DiGraph]],
     config: dict,
-    k_expanded: int
+    k_expanded: int,
+    eval_run: bool = False
 ) -> Dict[str, Dict[str, float]]:
     """
     Augments the scores of the initial retrieval results with graph-based scores.
@@ -172,8 +173,8 @@ def _augment_scores_with_graph(
         doc_ids: A set of document IDs to augment.
         loaded_graphs: A dictionary mapping top-level URLs to their loaded NetworkX graphs.
         config: The loaded configuration dictionary.
-        k_expanded: The number of documents to expand the results by (multiplying by k_expanded).
-        
+        k_expanded: The number of documents to expand the final result to
+        eval_run: Whether this is an evaluation run.
     """
     augmented_docs = defaultdict(tuple)
 
@@ -201,16 +202,10 @@ def _augment_scores_with_graph(
             logger.info(f"Document ID {doc_id} has {len(neighbors)} neighbors.")
             
             for neighbor_id in neighbors:
-                current_score = augmented_docs.get(neighbor_id, (0.0, top_level_url))[0]
+                # final weight of the neighbor depents on the importance of the original doc_id
+                edge_weight = G.get_edge_data(doc_id, neighbor_id, {}).get('weight', 0.0)
                 augmented_docs[neighbor_id] = (
-                    max(
-                        current_score,
-                        G.get_edge_data(doc_id, neighbor_id, {}).get('weight', 0.0) * scores_data[doc_id]['vector_sim']
-                    ),
-                    top_level_url
-                )
-                augmented_docs[doc_id] = (
-                    scores_data[doc_id]['vector_sim'],
+                    edge_weight * scores_data[doc_id]['vector_sim'],
                     top_level_url
                 )
         else:
@@ -219,20 +214,24 @@ def _augment_scores_with_graph(
 
     logger.debug(f"Calculated raw graph context scores for {len(augmented_docs)} documents.")
     docs_with_graph_scores = sorted(augmented_docs.items(), key=lambda x: x[1][0], reverse=True)[:k_expanded]
-    # Return the top k_expanded results based on the augmented score
-    logger.info(f"Returning {min(len(docs_with_graph_scores), k_expanded)} augmented scores.")
-    doc_ids_by_url = defaultdict(list)
-    for doc_id, (score, url) in docs_with_graph_scores:
-        doc_ids_by_url[url].append(doc_id)
-    logger.info(f"Returning {len(doc_ids_by_url)} unique sources.")
-    return doc_ids_by_url
+    if not eval_run:
+        # Return the top k_expanded results based on the augmented score
+        logger.info(f"Returning {min(len(docs_with_graph_scores), k_expanded)} augmented scores.")
+        doc_ids_by_url = defaultdict(list)
+        for doc_id, (score, url) in docs_with_graph_scores:
+            doc_ids_by_url[url].append(doc_id)
+        logger.info(f"Returning {len(doc_ids_by_url)} unique sources.")
+        return doc_ids_by_url
+    else:
+        return docs_with_graph_scores
 
 def retrieve_from_group_with_graph(
     group_name: str,
     query: str,
     k: int,
     config: dict,
-    k_expanded_multiplier: int = 2
+    k_expanded_multiplier: int = 2,
+    eval_run: bool = False
 ) -> List[Document]:
     """
     Retrieves documents using vector similarity and graph-based score augmentation.
@@ -243,6 +242,7 @@ def retrieve_from_group_with_graph(
         k: The final number of documents to return.
         config: The loaded configuration dictionary.
         k_expanded_multiplier: Factor to expand k for initial retrieval.
+        eval_run: Whether this is an evaluation run.
 
     Returns:
         A list of re-ranked Documents.
@@ -250,7 +250,7 @@ def retrieve_from_group_with_graph(
     logger.info(f"Starting retrieval with graph re-ranking for group '{group_name}'")
     # vector_store = load_existing_vector_store(get_vector_store_path_for_url(config, group_name), config)
     # 1. Initial Expanded Retrieval
-    logger.debug(f"Performing initial retrieval for top {k} documents.")
+    logger.info(f"Performing initial retrieval for top {k} documents.")
     expanded_results = retrieve_from_group(group_name, query, k, config)
 
     if not expanded_results:
@@ -265,6 +265,7 @@ def retrieve_from_group_with_graph(
        
     # 3. Load Graphs for the entire group
     loaded_graphs = _load_graphs_for_group(group_name, config)
+    logger.info(f"Loaded {len(loaded_graphs)} graphs for group '{group_name}'")
 
     # 4. Calculate Raw Graph Scores
     doc_ids_by_url = _augment_scores_with_graph(
@@ -272,10 +273,14 @@ def retrieve_from_group_with_graph(
         doc_ids_in_set, 
         loaded_graphs,
         config,
-        k_expanded_multiplier * k
+        k_expanded_multiplier * k,
+        eval_run
     )
-
-    return _collate_documents_by_source(doc_ids_by_url, config)
+    if not eval_run:
+        return _collate_documents_by_source(doc_ids_by_url, config)
+    else:
+        return _get_raw_chunks_for_eval(doc_ids_by_url, config)
+        # return doc_ids_by_url
 
 
 def _collate_documents_by_source(doc_ids_by_url, config) -> List[Document]:
@@ -297,3 +302,16 @@ def _collate_documents_by_source(doc_ids_by_url, config) -> List[Document]:
         joint_content = "\n\n".join([d.page_content for d in sorted_docs])
         final_docs.append(Document(page_content=joint_content, metadata=sorted_docs[0].metadata))
     return final_docs
+
+
+def _get_raw_chunks_for_eval(doc_ids_by_url, config) -> List[Document]:
+    """Groups documents by source, sorts by position, and collates content."""
+    final_chunks = []
+    for doc_id, (score, url) in doc_ids_by_url:
+        if url != 'https:https://ai.pydantic.dev':
+            url = _get_top_level_url_for_source(url, config)
+        vector_store_path = get_vector_store_path_for_url(config, url)
+        logger.info(f"Loading vector store from {vector_store_path}")
+        vector_store = load_existing_vector_store(vector_store_path, config)
+        final_chunks.append((vector_store.docstore._dict[doc_id], score))
+    return final_chunks

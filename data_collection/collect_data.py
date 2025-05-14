@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 from config.config import ConfigManager, ConfigError
 from data_collection.fetcher import DocumentationFetcher
 from config.utils import get_logger
@@ -46,3 +47,16 @@ def run_initial_fetch(config_path: str = 'config.json', max_depth: int = 5) -> N
     
     # 4. Fetch Repositories # TODO
 
+
+def run_pydantic_ai_dev_index_fetch(config_path: str = 'config.json') -> None:
+    the_only_url_that_matters = "https://ai.pydantic.dev/llms-full.txt"
+    config_manager = ConfigManager(config_path)
+    # download the file
+    import requests
+    response = requests.get(the_only_url_that_matters)
+    # create the directory if it doesn't exist
+    the_dir = Path(config_manager.local_storage_path) / 'documentation_raw' / 'pydantic_ai_dev_index'
+    the_dir.mkdir(parents=True, exist_ok=True)
+    with open(the_dir / "llms-full.md", "w") as f:
+        f.write(response.text)
+        
