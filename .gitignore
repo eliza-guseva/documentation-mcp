@@ -1,4 +1,4 @@
-retrieved_data/
+retrieved_data/documentation_raw/
 **/__pycache__
 *.html
 *.log
@@ -6,3 +6,4 @@ retrieved_data/
 venv
 *.ipynb
 .DS_Store
+.env

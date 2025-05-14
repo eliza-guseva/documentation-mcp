@@ -8,6 +8,7 @@ from config.config import ConfigManager
 from vectorizing_and_retrieval.query_vector_graph import retrieve_from_group_with_graph, retrieve_from_group
 from config.utils import get_logger
 from agent.agent_states import BaseAgentState, MultiQueryAgentState
+from evals.tracers import conditional_trace, ls_client
 
 config = ConfigManager('config.json').config
 logger = get_logger(__name__)
@@ -15,7 +16,7 @@ logger = get_logger(__name__)
 
 
 def pydantic_ai_retrieval_tool(query: str, k: int = 5) -> List[Dict[str, Any]]:
-    results = retrieve_from_group('pydantic_ai', query, k, config)
+    results = retrieve_from_group_with_graph('pydantic_ai', query, k, config)
     formatted_docs = []
     for doc in results:
         formatted_docs.append({
@@ -49,6 +50,7 @@ def _doc_based_response_system_prompt():
     5. Structure your response with clear headings, steps, and explanations
     6. Include relevant technical details and parameter explanations
     7. Cite specific documentation sources when providing information
+    8. Follow user's instructions on output format if provided
     
     Your answers should be based solely on the retrieved documentation.
     If the information that is relevant to the query isn't in the retrieved documents, 
@@ -61,6 +63,13 @@ def _doc_based_response_system_prompt():
     """
 
 
+@conditional_trace(
+    run_type="chain",
+    name="response_node",
+    langsmith_client=ls_client,
+    eval_tags=["hallucination_eval"],
+    sample_rate=1
+)
 def response_node(state: BaseAgentState) -> BaseAgentState:
     """Generate response based on retrieved documents"""
     messages = state["messages"]
