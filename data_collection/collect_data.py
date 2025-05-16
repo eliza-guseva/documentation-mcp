@@ -49,6 +49,7 @@ def run_initial_fetch(config_path: str = 'config.json', max_depth: int = 5) -> N
 
 
 def run_pydantic_ai_dev_index_fetch(config_path: str = 'config.json') -> None:
+    """Not used anymore, but kept for reference."""
     the_only_url_that_matters = "https://ai.pydantic.dev/llms-full.txt"
     config_manager = ConfigManager(config_path)
     # download the file

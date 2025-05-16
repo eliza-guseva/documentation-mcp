@@ -9,7 +9,6 @@ from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 
 
-# Get a logger instance for this module
 logger = logging.getLogger(__name__)
 
 

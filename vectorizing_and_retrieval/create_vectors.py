@@ -1,4 +1,3 @@
-import json
 import os
 from pathlib import Path
 from vectorizing_and_retrieval.chunking import chunk_json_file, chunk_markdown_file
@@ -327,6 +326,9 @@ def update_vector_db_for_url(url: str, config: dict) -> Tuple[int, int]:
 
 
 def update_vector_db_for_all_urls(config: dict) -> None:
+    """
+    Update the vector database for all URLs in the configuration.
+    """
     # Flatten the list of URLs from the dictionary values
     all_urls = [url for url_list in config['documentation_urls'].values() for url in url_list]
     unique_urls = list(set(all_urls)) # Remove duplicates
@@ -340,7 +342,7 @@ def update_vector_db_for_all_urls(config: dict) -> None:
         total_updated_chunks += updated
         total_deleted_chunks += deleted
 
-    logger.info(f"Finished processing all URLs.")
+    logger.info("Finished processing all URLs.")
     logger.info(f"Total chunks updated (added/replaced): {total_updated_chunks}")
     logger.info(f"Total stale chunks deleted: {total_deleted_chunks}")
 

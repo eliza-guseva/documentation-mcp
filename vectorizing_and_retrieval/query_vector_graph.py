@@ -74,7 +74,7 @@ def retrieve_from_group(
     
     top_k_results = all_results[:k]
     logger.info(f"Returning {len(top_k_results)} combined results for group '{group_name}'")
-    for doc, score in top_k_results:
+    for doc, _score in top_k_results:
         logger.info(f"Retrieved from {doc.metadata.get('source')}")
     return top_k_results
 
@@ -218,7 +218,7 @@ def _augment_scores_with_graph(
         # Return the top k_expanded results based on the augmented score
         logger.info(f"Returning {min(len(docs_with_graph_scores), k_expanded)} augmented scores.")
         doc_ids_by_url = defaultdict(list)
-        for doc_id, (score, url) in docs_with_graph_scores:
+        for doc_id, (_score, url) in docs_with_graph_scores:
             doc_ids_by_url[url].append(doc_id)
         logger.info(f"Returning {len(doc_ids_by_url)} unique sources.")
         return doc_ids_by_url

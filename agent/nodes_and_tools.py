@@ -5,7 +5,7 @@ from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from config.config import ConfigManager
 
-from vectorizing_and_retrieval.query_vector_graph import retrieve_from_group_with_graph, retrieve_from_group
+from vectorizing_and_retrieval.query_vector_graph import retrieve_from_group_with_graph
 from config.utils import get_logger
 from agent.agent_states import BaseAgentState, MultiQueryAgentState
 from evals.tracers import conditional_trace, ls_client
@@ -16,6 +16,10 @@ logger = get_logger(__name__)
 
 
 def pydantic_ai_retrieval_tool(query: str, k: int = 5) -> List[Dict[str, Any]]:
+    """
+    Retrieve documents from the PydanticAI group using the graph.
+    k is the number of documents to retrieve.
+    """
     results = retrieve_from_group_with_graph('pydantic_ai', query, k, config)
     formatted_docs = []
     for doc in results:
@@ -27,7 +31,7 @@ def pydantic_ai_retrieval_tool(query: str, k: int = 5) -> List[Dict[str, Any]]:
 
 
 def retrieval_node(state: BaseAgentState) -> BaseAgentState:
-    """Directly execute retrieval without ToolExecutor middleware"""
+    """LangGraph node that retrieves documents from the PydanticAI group using the graph."""
     query = state["messages"][-1].content if state["messages"] else ""
     
     # Call your retrieval function directly
@@ -91,13 +95,17 @@ def response_node(state: BaseAgentState) -> BaseAgentState:
         )
     except Exception as e:
         logger.error(f"Failed to generate response from LLM. Error: {e}. Messages: {messages}. Context: {context}")
-        response = AIMessage(content=f"I am sorry! Something went horribly wrong. Please try again later. Or maybe even better: fix me! :D")
+        response = AIMessage(content="I am sorry! Something went horribly wrong. Please try again later. Or maybe even better: fix me! :D")
     
     # Return the AI message
     return {"messages": messages + [response]}
 
 
 def _router_prompt_template():
+    """
+    Prompt template for the router node.
+    The router node decides on the best course of action based on the user's query and the conversation history.
+    """
     return """
     You are an expert query analyzer and conversational assistant.
     Your task is to process a user's query in the context of the recent conversation history and decide on the best course of action.
@@ -192,6 +200,7 @@ def _router_prompt_template():
     sample_rate=1
 )
 def router_node(state: MultiQueryAgentState) -> Dict[str, Any]:
+    """LangGraph node that decides on the best course of action based on the user's query and the conversation history."""
     history = state["messages"][-min(len(state["messages"]), 6):]
     user_query_message = state["messages"][-1]
     messages_to_add = history
@@ -265,6 +274,7 @@ def router_node(state: MultiQueryAgentState) -> Dict[str, Any]:
 
 
 def parallel_retrieval_node(state: MultiQueryAgentState) -> Dict[str, Any]: 
+    """LangGraph node that retrieves documents from the PydanticAI group in parallel."""
     queries = state.get("search_queries", [])
     original_query = state.get("original_query", "")
     
@@ -278,6 +288,7 @@ def parallel_retrieval_node(state: MultiQueryAgentState) -> Dict[str, Any]:
     logger.info(f"Parallel retrieval for original query: '{original_query}'. Sub-queries: {valid_queries}")
     
 
+    # in parallel! :)
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(valid_queries) or 1)) as executor:
         # Submit all retrieval tasks
         future_to_query = {executor.submit(pydantic_ai_retrieval_tool, query_text): query_text for query_text in valid_queries}
@@ -290,7 +301,7 @@ def parallel_retrieval_node(state: MultiQueryAgentState) -> Dict[str, Any]:
                 logger.info(f"Successfully retrieved {len(results)} docs for sub-query: '{query_text}'")
             except Exception as e:
                 logger.error(f"Error during retrieval for sub-query '{query_text}' (Original: '{original_query}'): {e}")
-                # Optionally, collect errors or decide how to handle partial failures
+                
 
     # De-duplicate results based on content
     unique_results: List[Dict[str, Any]] = []
@@ -306,4 +317,8 @@ def parallel_retrieval_node(state: MultiQueryAgentState) -> Dict[str, Any]:
 
 
 def return_output_node(state: MultiQueryAgentState) -> MultiQueryAgentState:
+    """
+    LangGraph node that returns the output of the agent.
+    (just formats into a more streaming-friendly format)
+    """
     return {"messages": state["messages"]}

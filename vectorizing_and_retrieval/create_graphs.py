@@ -1,7 +1,5 @@
-from  typing import List
 import json
 from pathlib import Path
-from langchain_core.documents import Document
 from logging import getLogger
 from collections import defaultdict, namedtuple
 import networkx as nx
@@ -25,7 +23,19 @@ def get_graph_path(url: str, config: dict) -> Path:
     return get_local_storage_path(config) / "graphs" / f"{url_to_source_identifier(url).replace('.', '_')}.json"
 
 
-def crate_graph_for_url(url: str, config: dict) -> List[Document]:
+def crate_graph_for_url(url: str, config: dict) -> None:
+    """
+    Create a graph for a given URL (source of documentation).
+    The graph is a directed graph where the nodes are the chunks of the documentation and the edges are the relationships between the chunks.
+    The graph is serialized to a JSON file in the local storage path.
+    
+    Args:
+        url: The URL of the documentation to create a graph for.
+        config: The configuration dictionary.
+        
+    Returns:
+        None.
+    """
     graph = nx.DiGraph()
     source_path = get_raw_docs_path(config) / url_to_source_identifier(url)
     index_path = get_vector_store_path_for_url(config, url)
@@ -76,6 +86,9 @@ def crate_graph_for_url(url: str, config: dict) -> List[Document]:
     return
 
 def create_graph_for_all_urls(config: dict):
+    """
+    Create a graph for all URLs in the configuration.
+    """
     # Flatten the list of URLs from the dictionary values
     all_urls = [url for url_list in config['documentation_urls'].values() for url in url_list]
     unique_urls = list(set(all_urls)) # Remove duplicates
@@ -85,7 +98,10 @@ def create_graph_for_all_urls(config: dict):
         crate_graph_for_url(url, config)
         
         
-def load_graph_for_url(url: str, config: dict):
+def load_graph_for_url(url: str, config: dict) -> nx.DiGraph:
+    """
+    Load a graph for a given URL (source of documentation).
+    """
     graph_path = get_graph_path(url, config)
     with open(graph_path, "r") as f:
         data = json.load(f)

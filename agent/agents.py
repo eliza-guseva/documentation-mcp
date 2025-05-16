@@ -21,6 +21,9 @@ logger = get_logger(__name__)
 
 
 def create_one_action_agent_executor() -> AgentExecutor:
+    """
+    Create an agent executor that performs a single action of retrieving documents and responding.
+    """
     workflow = StateGraph(BaseAgentState)
     workflow.add_node("retrieval", retrieval_node)
     workflow.add_node("response", response_node)
@@ -32,6 +35,9 @@ def create_one_action_agent_executor() -> AgentExecutor:
 
 
 def _route(state: MultiQueryAgentState) -> MultiQueryAgentState:
+    """
+    Route the query to the appropriate node based on the decision type for the MultiQueryAgent
+    """
     decision_type = state["decision_type"]
     if decision_type == "DECOMPOSE":
         return "parallel_retrieval"
@@ -40,6 +46,12 @@ def _route(state: MultiQueryAgentState) -> MultiQueryAgentState:
 
 
 def create_multi_query_agent_executor() -> AgentExecutor:
+    """
+    Create an agent executor that performs a multi-query action of retrieving documents and responding.
+    The agent decomposes (if needed) a query into multiple sub-queries 
+    then it retrieves relevant documents for each sub-query.
+    It also evaluates the original query and answers follow-up questions.
+    """
     workflow = StateGraph(MultiQueryAgentState)
     workflow.add_node("router", router_node)
     workflow.add_node("parallel_retrieval", parallel_retrieval_node)
@@ -62,6 +74,10 @@ def create_multi_query_agent_executor() -> AgentExecutor:
 
 
 class StateCapture(BaseCallbackHandler):
+    """
+    A callback handler that captures the state of the agent.
+    It is necessary to capture the history of messages
+    """
     def __init__(self):
         self.messages = []
         
@@ -73,7 +89,7 @@ class StateCapture(BaseCallbackHandler):
             
     def on_chain_end(self, outputs, **kwargs):
         # This is where the updated state is often returned
-        logger.info(f"I am in on_chain_end")
+        logger.info("I am in on_chain_end")
         if "messages" in outputs:
             self.messages = copy.deepcopy(outputs["messages"])
             
@@ -84,13 +100,14 @@ class StateCapture(BaseCallbackHandler):
 def stream_agent_output(agent_executor: AgentExecutor, query: str, state_capture: StateCapture):
     """Stream the agent's response"""
     langchain_is_being_funny = False
-    for chunk, metadata in agent_executor.stream(
+    for chunk, _metadata in agent_executor.stream(
         {"messages": state_capture.messages + [HumanMessage(content=query)]},
         stream_mode="messages",
         config={"callbacks": [state_capture]}
     ):
         if hasattr(chunk, "content") and chunk.content and isinstance(chunk, AIMessage):
-            if chunk.content.startswith("{"):
+            # Langchain still occassionally returns what it is not supposed to, though much, much better than v0.1
+            if chunk.content.startswith("{"): 
                 langchain_is_being_funny = True
             if chunk.content.startswith("Searching:"):
                 langchain_is_being_funny = False

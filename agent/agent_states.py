@@ -1,5 +1,4 @@
-from typing import TypedDict, Annotated, List, Dict, Any
-import operator
+from typing import TypedDict, List, Dict, Any
 
 class BaseAgentState(TypedDict):
     """
@@ -7,8 +6,8 @@ class BaseAgentState(TypedDict):
     - messages: List of messages
     - retrieved_docs: List of retrieved documents
     """
-    messages: List[Any]
-    retrieved_docs: List[Dict[str, Any]]
+    messages: List[Any] # List of messages
+    retrieved_docs: List[Dict[str, Any]] # List of retrieved documents
     
     
 class MultiQueryAgentState(BaseAgentState):

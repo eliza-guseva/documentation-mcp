@@ -293,11 +293,6 @@ class DocumentationFetcher:
 
             # Extract HTML code blocks first
             code_blocks = {}
-            # Select potential code containers: divs with specific classes OR pre tags
-            # Process in order to handle nested cases correctly if they arise.
-            potential_containers = soup.select("div.highlight, div[class*='language-'], pre")
-            
-            processed_elements = set()
 
             
             # --- Clean up whitespace-only text nodes ---

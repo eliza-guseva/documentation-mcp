@@ -1,7 +1,7 @@
 from langsmith import Client
 from langsmith.run_helpers import traceable
 from functools import wraps
-from typing import Callable, Optional, List, Union, Any, Dict
+from typing import Callable, Optional, List, Union
 import random
 import json
 from langchain_openai import ChatOpenAI
@@ -11,9 +11,6 @@ from config.utils import get_logger
 
 logger = get_logger(__name__)
 load_dotenv()
-
-
-
 
 
 def get_langsmith_client():
@@ -72,6 +69,7 @@ def conditional_trace(
 
 
 def simple_hallucination_prompt(doc_content: str, response: str, user_query: str):
+    """Not used anymore, but kept for reference."""
     return f"""
         You are a hallucination detector. Compare the AI's response against the source documents.
         
@@ -91,6 +89,11 @@ def simple_hallucination_prompt(doc_content: str, response: str, user_query: str
         """
         
 def hallucination_classiffier_prompt(doc_content: str, response: str, user_query: str):
+    """
+    Current hallucination classifier prompt. 
+    Determines if the response is hallucinatory. 
+    Returns scores for expansion and contradiction.
+    """
     return f"""
         You are an expert in understanding how well the AI's response matches the source documents.
         Compare the AI's response against the source documents.
@@ -116,6 +119,11 @@ def hallucination_classiffier_prompt(doc_content: str, response: str, user_query
         """
         
 def quality_classifier_prompt(doc_content: str, response: str, user_query: str):
+    """
+    Current quality classifier prompt.
+    Determines if the response is of good quality.
+    Returns scores for answer, unnecessary info, helpfulness.
+    """
     return f"""
         You are an expert in understanding various aspects of RAG responses.
         Compare the AI's response against the retrieved documents.
@@ -148,13 +156,12 @@ def quality_classifier_prompt(doc_content: str, response: str, user_query: str):
         """
 
 
-
 def evaluate(run, prompt_function: Callable):
     """
     Evaluate based on LLM judgement
     Args:
         run: The run to evaluate
-        prompt_function: The prompt function to use
+        prompt_function: The prompt function to use, must have 3 arguments: doc_content, response, user_query
     Returns:
         A tuple of (score, comment)
     """
