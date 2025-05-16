@@ -9,7 +9,7 @@
 
 LLMs struggle to access up-to-date AI documentation, especially for non-mainstream libraries. They invent non-existent syntax and produce wrong claims. The libraries evolve very fast, which creates an understandable difficulty for LLMs to keep up.
 
-I developed an MCP server that provides current information about rapidly evolving AI libraries. This local server uses a standard protocol to connect with various LLMs and AI coding tools, delivering relevant context when needed.
+I developed an MCP (model context protocol) server that provides current information about rapidly evolving AI libraries. An MCP server is a local server uses a standard protocol to connect with various LLMs and AI coding tools, delivering relevant context when needed.
 
 The solution implements semantic retrieval that either feeds directly into foundation models via MCP or routes to specialized agents. The design tries to optimize token efficiency and offers optional evaluation and tracing capabilities.
 
@@ -47,7 +47,7 @@ I evaluated the Agent end-to-end (every step) and found out that compared to the
 6. Recommendations:
  - Offer recommendations for potential improvements or next steps.
 
-# 1.2 Data sourcing & Problem definition
+# 1. and 2. Data sourcing & Problem definition
 
 **Source** https://ai.pydantic.dev/
 
@@ -218,13 +218,13 @@ The pipelines can be found here:
 - Data loading functions are in `data_collection`
 - Chunking, vectorization, graph utils and retrieval functions are in `vectorizing_and_retrieval`
 - Agent and generation logic is in `agent`
-- Tracing functions are in `evels`
+- Tracing functions are in `evals`
 - Root contains:
     - `mcp_main.py` -- an MCP server that can be connected to supporting LLMS/providers
     - `feedback_processor.py` -- a script that runs evaluations after tracing has been done. To run: `python feedback_processor.py`
     - `config.json.template` -- template to produce `config.json`
     - `.gitignore`
-    - `.env` <- needed to intearct with LangSmith. Since it is not necessary for MCP, I didn't include it into `config.json`
+    - `.env` <- needed to intearact with LangSmith. Since it is not necessary for MCP, I didn't include it into `config.json`
     - `gradio_simple.py` -- a standalone agent interface that can be run in the browser with `python -m gradio_simple`
 
 # 5. Evaluation
@@ -235,11 +235,11 @@ I evaluated 4 main components of my system through a balanced approach that prio
 
 | Component | Metric | Result | Baseline | Improvement |
 |-----------|--------|--------|----------|-------------|
-| Retrieval Success | Success Rate | 93% (14/15) | - | - |
-| Multi-Query Generation | Accuracy | 95% (19/20) | - | - |
-| Bad Query Detection | False Positive Rate | 10% (2/20) | - | - |
+| Retrieval Success | Success Rate | 93% (14/15) | NA | NA |
+| Multi-Query Generation | Accuracy | 95% (19/20) | NA | NA |
+| Bad Query Detection | False Positive Rate | 10% (2/20) | NA | NA |
 | Answer Quality | Correctness & Completeness | 0.83 | 0.26 | 3.2x improvement |
-| Hallucination | Unsupported Claims Score | 0.33 | -- | -- |
+| Hallucination | Unsupported Claims Score | 0.33 | NA | NA |
 | Hallucinated syntaxis | Hallucinated Syntaxis Score | 0 | 0.5 | significant improvemnt |
 
 >**Note, that Unsupported Claims Score = 0.5 means a minor and _reasonable_ inference based on the documentation.**
@@ -251,7 +251,7 @@ I evaluated 4 main components of my system through a balanced approach that prio
 <img src="extra_score.png" width="400">
 
 ## Disclaimer
->**I admit that the size of the query pull (20) doesn't allow for proper satstical analysis supported claims, however under the time limitations and project scope it demonstrates general tendencies of the system, and if expanded can yield proper evaluation results**
+>**I admit that the size of the query pool (20) doesn't allow for proper satstical analysis supported claims, however under the time limitations and project scope it demonstrates general tendencies of the system, and if expanded can yield proper evaluation results**
 
 
 ## Evaluation Methodology
@@ -272,7 +272,7 @@ My evaluation framework focused on three critical dimensions:
  - I evaluated it manually. **Out of 20 cases, 19 were processed correctly**
 
  ### Bad query catching
-  - Generally this step works well and catches trully irrelevant queries. However **rarely (I so it 2x out of 20 (10%)) it misfires**, by classifying a correct query as an irrelevant. It asks for clarification, so it's not a disaster, imo.
+  - Generally this step works well and catches trully irrelevant queries. However **rarely (I saw it 2x out of 20 (10%)) it misfires**, by classifying a correct query as an irrelevant. It asks for clarification, so it's not a disaster, imo.
 
 ### Fact-based generation
 First, I considered typical uses-cases and came up with 5 types of queries (see below). Then I generated a stratified (based on sources) set of queries to cover all the types. For every type I also generated a query that is either not supported by documentation or partially supported.
