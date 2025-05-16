@@ -22,7 +22,7 @@ I evaluated the Agent end-to-end (every step) and found out that compared to the
 - You will need Python 3.12.
 - Install the requirements `pip install -r requirement.txt` and `pip install -r dev_requirements.txt` (for ipynb support).
 - rename `config.json.template` into `config.json` and edit it
-- Current repo should be ready to run inference with `python -m gradio_simple` if you provide your open ai api key in `config.json`
+- Current repo should be ready to run inference with `python -m gradio_simple` if you provide your open ai api key in `config.json` (It takes some time before the first run)
 - To re-run the pipeline from scratch with HF embeddings, delete files in `retrieved_data` and run `data_preparation.ipynb`
 - To integrate the MCP server with your provider, follow your provider instructions.
 
