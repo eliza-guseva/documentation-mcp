@@ -404,7 +404,6 @@ These ask about using the library with other tools or frameworks.
 - Maybe I can try (for fun's sake) turn my agent into a more friendly coding assistant. Since now it is unreasonably strict with sources of information. Making it more flexible can make it actually useful.
 - I also believe I should stop using LangSmith and switch to Logfire and a custom evaluation viewer/editor. LangSmith proved itself too cumbersome with the type of evaluation I am doing -- impossible to put human feedback next to AI feedback easily, loosing some of the scores in the interfaces, confusing id system. This exercise proved to me that writing (generating rather) a custom case-specific viewer/editor is a worthy endeavor.
 - I believe that using 0 and 1 evals with stricter criteria of what is 0 and what is 1 is much better idea for the future. The intermediate scale of 0, 0.5, 1 was indeed (as guides suggested) more confusing than helpful. But I felt I had to try to deviate from best practices, given a certain freedom of this assessment :)
-- Looking forward to build something else. I think this little project +- exhausted itself.
 
 <img src="tired_robot.png" width="400">
 (This is sligtly disturbing... Though still kinda neat)
