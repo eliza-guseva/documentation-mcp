@@ -71,32 +71,8 @@ def conditional_trace(
     return decorator
 
 
-def evaluate_hallucination(run):
-    """
-    Evaluate hallucination by comparing response against retrieved docs
-    Returns a tuple of (score, comment)
-    """
-    try:
-        # Get the retrieved docs and response from the run
-        inputs = run.inputs
-        outputs = run.outputs
-        retrieved_docs = inputs['state'].get('retrieved_docs', [])
-        messages = [message for message in outputs.get('messages', []) if message.get('type', '') == 'ai']
-        
-        if not inputs or not outputs:
-            return None, "Missing inputs or outputs"
-            
-        response = messages[-1].get('content', '')
-        
-        if not retrieved_docs or not response:
-            return None, "Missing retrieved docs or response"
-            
-        # Combine all retrieved doc content
-        doc_content = "\n".join([doc.get('content', '') for doc in retrieved_docs])
-        
-        # Use an LLM to evaluate hallucination
-        llm = ChatOpenAI(model="gpt-4o", temperature=0)
-        eval_prompt = f"""
+def simple_hallucination_prompt(doc_content: str, response: str, user_query: str):
+    return f"""
         You are a hallucination detector. Compare the AI's response against the source documents.
         
         Source Documents:
@@ -114,11 +90,104 @@ def evaluate_hallucination(run):
         {{"score": float, "comment": "explanation"}}
         """
         
-        result = llm.invoke(eval_prompt)
-        evaluation = json.loads(result.content)
-        logger.info(f"score: {evaluation['score']}")
+def hallucination_classiffier_prompt(doc_content: str, response: str, user_query: str):
+    return f"""
+        You are an expert in understanding how well the AI's response matches the source documents.
+        Compare the AI's response against the source documents.
+        Assume the questions are asked about PydanticAI documentation.
         
-        return evaluation['score'], evaluation['comment']
+        Source Documents:
+        {doc_content}
+        
+        AI Response:
+        {response}
+        
+        There are 2 categories of hallucination:
+        1. EXPANSION_SCORE
+            - return 0 if the response contains ONLY information in the source documents
+            - return 0.5 if AI *reasonably* inferred from the context
+            - return 1 if AI's answer is not derivable from the context (answer is not supported by the source documents)
+        1. CONTRADICTION_SCORE
+            - return 0 if the response does not contradict the source documents
+            - return 1 if the response contradicts the source documents
+        
+        Return ONLY a JSON object in this format:
+        {{"expansion_score": float, "contradiction_score": float, "comment": "explanation"}}
+        """
+        
+def quality_classifier_prompt(doc_content: str, response: str, user_query: str):
+    return f"""
+        You are an expert in understanding various aspects of RAG responses.
+        Compare the AI's response against the retrieved documents.
+        Focus on the user query and the quality of the response based on the scores defined below.
+        In case an AI admits that it doesn't have information or asks a follow up question the scores are ans = 0, unnecessary_info_score = 1, helpful_score = 1.
+        Assume the questions are asked about PydanticAI documentation.
+        
+        User Query:
+        {user_query}
+        
+        AI Response:
+        {response}
+        
+        There are 4 categories of quality:
+        1. ANSWER_SCORE
+            - return 0 if the user query is not answered at all
+            - return 0.5 if the user query is answered but not fully
+            - return 1 if the user query is answered fully and correctly
+        2. UNNECESSARY_INFO_SCORE
+            - return 0 if most of the response is extra information that doesn't answer the user query
+            - return 0.5 if the answer is correct but too much extra information is provided
+            - return 1 if the response is to the point, providing only necessary extra information
+        3. HELPFULNESS_SCORE
+            - return 0 if the response is not helpful at all
+            - return 0.5 if the response is helpful but not fully
+            - return 1 if the response is helpful and provides a complete answer
+        
+        Return ONLY a JSON object in this format:
+        {{"answer_score": float, "unnecessary_info_score": float, "helpful_score": float, "comment": "explanation"}}
+        """
+
+
+
+def evaluate(run, prompt_function: Callable):
+    """
+    Evaluate based on LLM judgement
+    Args:
+        run: The run to evaluate
+        prompt_function: The prompt function to use
+    Returns:
+        A tuple of (score, comment)
+    """
+    try:
+        # Get the retrieved docs and response from the run
+        inputs = run.inputs
+        outputs = run.outputs
+        retrieved_docs = inputs['state'].get('retrieved_docs', [])
+        messages = [message for message in outputs.get('messages', []) if message.get('type', '') == 'ai']
+        human_message = [message for message in outputs.get('messages', []) if message.get('type', '') == 'human']
+        user_query = human_message[-1].get('content', '')
+        
+        if not inputs or not outputs:
+            return None, "Missing inputs or outputs"
+            
+        response = messages[-1].get('content', '')
+        
+        if not retrieved_docs or not response:
+            return None, "Missing retrieved docs or response"
+            
+        # Combine all retrieved doc content
+        doc_content = "\n".join([doc.get('content', '') for doc in retrieved_docs])
+        
+        # Use an LLM to evaluate hallucination
+        llm = ChatOpenAI(model="gpt-4o", temperature=0)
+        
+        eval_prompt = prompt_function(doc_content, response, user_query)
+        result = llm.invoke(eval_prompt)
+        logger.info(f"result content: {result.content}")
+        evaluation = json.loads(result.content.replace("```json", "").replace("```", ""))
+        logger.info(f"evaluation: {evaluation}")    
+        
+        return evaluation
         
     except Exception as e:
         logger.error(f"Error evaluating hallucination: {e}")

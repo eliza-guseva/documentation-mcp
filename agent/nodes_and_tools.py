@@ -46,20 +46,18 @@ def _doc_based_response_system_prompt():
     1. Thoroughly analyze ALL the retrieved documentation. Are they relevant to the query?
     2. Synthesize the information into a coherent, comprehensive answer. Ignore the irrelevant information.
     3. Make sure that the answer you provide *is relevant to the query*
-    4. Provide concrete, runnable code examples that accurately reflect PydanticAI patterns
+    4. If necessary and only if necessary, provide concrete, runnable code examples that accurately reflect PydanticAI patterns
     5. Structure your response with clear headings, steps, and explanations
-    6. Include relevant technical details and parameter explanations
+    6. If necessary, include relevant technical details and parameter explanations
     7. Cite specific documentation sources when providing information
-    8. Follow user's instructions on output format if provided
     
     Your answers should be based solely on the retrieved documentation.
     If the information that is relevant to the query isn't in the retrieved documents, 
     acknowledge this limitation clearly.
     
-    Be comprehensive and detailed when explaining complex PydanticAI concepts.
+    Be comprehensive and detailed when explaining complex PydanticAI concepts, but not more than necessary.
+    Do not add procedural information, just the information that is relevant to the query.
     Return the answer in markdown format.
-    Add code blocks to your response when relevant.
-    Add source links to your response.
     """
 
 
@@ -67,7 +65,7 @@ def _doc_based_response_system_prompt():
     run_type="chain",
     name="response_node",
     langsmith_client=ls_client,
-    eval_tags=["hallucination_eval"],
+    eval_tags=["hallucination_eval", "quality_eval"],
     sample_rate=1
 )
 def response_node(state: BaseAgentState) -> BaseAgentState:
@@ -125,6 +123,7 @@ def _router_prompt_template():
         *   The query is likely a new, valid question that requires searching the PydanticAI documentation.
         *   Rephrase or break down the query into one or more sub-queries optimized for a vector database search.
         *   The goal is to find the most relevant chunks for the query.
+        *   If a question is about tradeoffs or comparison, think HARD how this information can be extracte the best. Decompose it thoughtfully.
         *   If the query is relatively simple and direct, generate 1 query (possibly rephrased for keywords).
         *   Your decision should be "DECOMPOSE".
 
@@ -185,7 +184,13 @@ def _router_prompt_template():
     Consider the provided conversation history carefully when making your decision.
     """
     
-    
+@conditional_trace(
+    run_type="chain",
+    name="router_node",
+    langsmith_client=ls_client,
+    eval_tags=[],
+    sample_rate=1
+)
 def router_node(state: MultiQueryAgentState) -> Dict[str, Any]:
     history = state["messages"][-min(len(state["messages"]), 6):]
     user_query_message = state["messages"][-1]
