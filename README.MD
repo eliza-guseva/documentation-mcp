@@ -122,9 +122,7 @@ I also utilized MCP SDK for MCP server implementation (https://github.com/modelc
 For the user interface, I implemented Gradio to provide both inline and standalone interactivity, offering a clean and functional interface with minimal almost 0 overhead.
 
 For vector storage, I selected FAISS:
-- It handles the relatively small dataset efficiently and has straightforward integration.
-- It also offers scalability options like index compression (IndexPQ), batch loading, and GPU acceleration if needed.
-- However, for significantly larger datasets, a managed solution like Pinecone would be preferable due to its horizontal scaling and multi-tenancy capabilities. But this is not our case :)
+- It handles the data efficiently and has straightforward integration.
 - I opted against hybrid retrieval (combining keyword and vector search) as vector retrieval alone produced sufficient results, keeping the system's complexity manageable.
 
 I implemented a graph overlay using NetworkX to enhance retrieval quality:
