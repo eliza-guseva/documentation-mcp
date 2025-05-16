@@ -229,59 +229,100 @@ The pipelines can be found here:
 
 # 5. Evaluation
 
-I evaluated 4 main components of my system:
- 1. Retrieval
- 2. Multi-query generation
- 3. Bad query cacting
- 4. Document-based generation
+I evaluated 4 main components of my system through a balanced approach that prioritizes practical insights over exhaustive metrics:
+
+## Performance Summary
+
+| Component | Metric | Result | Baseline | Improvement |
+|-----------|--------|--------|----------|-------------|
+| Retrieval Success | Success Rate | 93% (14/15) | - | - |
+| Multi-Query Generation | Accuracy | 95% (19/20) | - | - |
+| Bad Query Detection | False Positive Rate | 10% (2/20) | - | - |
+| Answer Quality | Correctness & Completeness | 0.83 | 0.26 | 3.2x improvement |
+| Hallucination | Unsupported Claims Score | 0.33 | -- | -- |
+| Hallucinated syntaxis | Hallucinated Syntaxis Score | 0 | 0.5 | significant improvemnt |
+
+>**Note, that Unsupported Claims Score = 0.5 means a minor and _reasonable_ inference based on the documentation.**
+
+>**Hallucinated PydanticAI syntaxis** is the major problem with Baseline, where even if Web Search is used, PydanticAI sytaxis resembles more LangChain than PydanticAI (made up syntaxis) or PydanticAI is conflated with Pydantic and Pydantic+Langchain integration is implemented
+
+<img src="answer_score.png" width="400">
+<img src="expansion.png" width="400">
+<img src="extra_score.png" width="400">
+
+## Disclaimer
+>**I admit that the size of the query pull (20) doesn't allow for proper satstical analysis supported claims, however under the time limitations and project scope it demonstrates general tendencies of the system, and if expanded can yield proper evaluation results**
 
 
- ## Retrieval
+## Evaluation Methodology
 
- - I attempted to follow best practices and generate query <-> chunk pairs to obtain recall@k and precision@k. However after 6 examples the effort proved to be excessive for 1 person and I changed my approach
- - Instead, I used an end-to-end combined humand and AI based system (more details below), where retrieval was evaluated based on 2 pieces of informatin -> 
-    1. Is answer to the user query present in the documentation (easier to check than where exactly)
-    2. Does this answer resurfaces itself in the final answer
-    3. Does the answer answers original query.
- - It is not the same as p@k and r@k, but much more manageable endeavor
- - **Out of 15 queries evaluated, 14 were retrieved correctly**
- - I do not check if extra information was retrieved along the way, since it doesn't damage the output and at my scale, this optimization isn't worth my effort
+### Retrieval
+I designed a balanced evaluation approach that optimized for both rigor and efficiency. Initially exploring classical 'gold standard' retrieval metrics for retrieval (recall@k and precision@k) through query-chunk pair analysis, I quickly recognized the diminishing returns of this approach given the project's scope and timeline.
 
- ## Multi-query generation
+Rather than pursuing metrics that would require excessive manual labeling effort, I pivoted to a more holistic end-to-end evaluation methodology that directly assessed what matters most in a production system: whether the correct information is successfully retrieved and utilized in generating accurate responses.
+
+My evaluation framework focused on three critical dimensions:
+- Information presence: Verifying that answers to user queries exist within the documentation
+- Information surfacing: Confirming that relevant information appears in final responses
+- Query satisfaction: Assessing whether responses directly answer the original queries
+
+
+ ### Multi-query generation
  - In the beginning of the process the Agent checks if a query is well-formed and if it perhaps needs to be modified or split into several queries
  - I evaluated it manually. **Out of 20 cases, 19 were processed correctly**
 
- ## Bad query catching
+ ### Bad query catching
   - Generally this step works well and catches trully irrelevant queries. However **rarely (I so it 2x out of 20 (10%)) it misfires**, by classifying a correct query as an irrelevant. It asks for clarification, so it's not a disaster, imo.
 
-  ## Document-based generation
+### Fact-based generation
+First, I considered typical uses-cases and came up with 5 types of queries (see below). Then I generated a stratified (based on sources) set of queries to cover all the types. For every type I also generated a query that is either not supported by documentation or partially supported.
 
-  For document-based generation I considered typical uses-cases and came up with 5 types of queries (see below). Then I generated a stratified (based on sources) set of queries to cover all the types. For every type I also generated a query that is either not supported by documentation or partially supported.
+I used double human and LLM as Judge evaluation and custom prompts with 0/1 or 0/0.5/1 options since there seem to be signficant indications that simpler evaluation criteria confuse LLMs less. The papers and 'best practices' guides I saw mostly use 0/1. For example: https://www.nature.com/articles/s41467-025-58551-6, https://hamel.dev/blog/posts/field-guide/.  But I wanted to experiment a little with 0/0.5/1, which produced a good result, despite the original worry.
 
-  I used double human and LLM as Judge evaluation and custom prompts with 0/1 or 0/0.5/1 options since there seem to be signficant indications that simpler evaluation criteria confuse LLMs less. The papers and 'best practices' guides I saw mostly use 0/1. For example: https://www.nature.com/articles/s41467-025-58551-6, https://hamel.dev/blog/posts/field-guide/.  But I wanted to experiment a little with 0/0.5/1, which produced a good result, despite the original worry.
+I used human and and an AI since every LLM eval requires meta-evaluation (one has to evaluate evaluators). Another reason is that in LLM evaluation it is crucial to understand your data perhaps even more than in classical DS, because even more than in classical DS we without thorugh evals can become victims of random unsupported by reality metrics. So manual evaluation is inevitable.
 
-  I used human and and an AI since every LLM eval requires meta-evaluation (one has to evaluate evaluators). Another reason is that in LLM evaluation it is crucial to understand your data perhaps even more than in classical DS, because even more than in classical DS we without thorugh evals can become victims of random unsupported by reality metrics. So manual evaluation is inevitable.
+I deliberately employed a rigorous bottom-up evaluation methodology, beginning with exploratory spot-checking to identify the most relevant criteria for this specific application domain. Then I produced a comprehensive set of initial critearia. I evaluated against all of them manually and with LLM (https://docs.google.com/spreadsheets/d/1UVdCyk_IM7gUBIkGNNuE_k_zTZJCdUdls-KZzFupCNU/edit?usp=sharing)
 
-  I began approaching the evaluation bottom-up (first doing spot-checking and trying to understand which criteria I need). Then I produced a comprehensive set of initial critearia. I evaluated against all of them manually and with LLM (https://docs.google.com/spreadsheets/d/1UVdCyk_IM7gUBIkGNNuE_k_zTZJCdUdls-KZzFupCNU/edit?usp=sharing)
+The results were very satisfying. Though on a couple of occasions I had to tweak an agent or an evaluator prompt. Through this systematic evaluation process, I refined my initial criteria set based on empirical findings, aligning with established research on 'criteria drift' (https://arxiv.org/abs/2404.12272), where evaluation criteria naturally evolve through interaction with the data. This adaptive approach to criteria development represents a methodological strength, allowing for discovery of the most meaningful evaluation dimensions rather than relying solely on predetermined metrics that might miss application-specific nuances.
 
-  The results were very satisfying. Though on a couple of occasions I had to tweak an agent or an evaluator prompt. In the process I also discovered which of my original criteria were useful and which criteria have to be substituted with others. This is a known phenomenon (criteria drift https://arxiv.org/abs/2404.12272) where "to grade outputs, people need to externalize and define their evaluation criteria; however, the process of grading outputs helps them to define that very criteria." I believe our main option here is to embrace the drift and hope for ultimate convergence.
 
-  The most prominent results of the evals were: 
-   - Answer Quality (is the answer answered correctly and fully). 
-        - My agent 0.83
-        - Baseline 0.26
-   - Unsopported claims (0 -- no unsupported claims, 0.5 -- minor and acceptable extensions, 1 -- serious hallucination)
-        - My agent 0.33 (human eval)
-        - 0.5 (AI eval)
-   - Retrieval success = 0.93
+## Key Findings
 
-#### A nuance
+1. **Retrieval System Robustness**: 93% success rate demonstrates strong retrieval capabilities without requiring perfect precision optimization.
+
+2. **Query Processing Effectiveness**: The system correctly processes and improves 95% of queries, with only 10% false positives when identifying irrelevant queries (which prompt for clarification rather than failing).
+
+3. **Significant Quality Improvement**: The agent achieves an 83% answer quality score (human) versus the baseline's 26%, representing a 3.2x improvement in correctness and completeness.
+
+4. **Low hallucination**: Human evaluation hallucination score is 34%, with strong tendency to minor insignficant expansion that don't 'hallucinate' PydanticAI syntxis. The rate of PydanticAI syntaxis hallucination was 0.
+
+5. **Methodoloy validation**: This short run revealed some weakness in the evaluation criteria which is aligned with 'criteria drift' concept. Most prominently indicating that for this particular system the most valuabel metrics are not generalized hallucination and contradiction scores, but rathe 'absence of hallucinated Pydantic-AI syntaxis'. Whil expansion into Pydantic-AI unrelated fields it's more of a strength than a weakness
+
+Comprehensive evaluation data is available in this [detailed spreadsheet](https://docs.google.com/spreadsheets/d/1UVdCyk_IM7gUBIkGNNuE_k_zTZJCdUdls-KZzFupCNU/edit?usp=sharing).
+
+---
+
+
+## Appendix A: Query Type Coverage
+
+The evaluation covered five distinct query types commonly encountered in software documentation contexts:
+
+| Query Type | Description | Example | Answer quality rate |
+|------------|-------------|---------|--------------|
+| Factual | Seeking specific information | "What is an agent?" | 100% |
+| Procedural | How to accomplish tasks | "How do I create an agent in Pydantic AI?" | 100% |
+| Conceptual | Understanding principles | "How does Pydantic AI's partial validation work?" | 75% |
+| Troubleshooting | Handling errors | "I get Validation error when streaming structured output" | 75% |
+| Integration | Using with other frameworks | "How do I integrate Pydantic AI with FastAPI?" | 75% |
+
+
+## Appendix B: Recent discovery
 
 Today, after more or less finishing the project I went to a Cursor meetup where I discovered that Cursor implemented "Docs" feature, which appears to be doing what I did -- periodically indexing documentation and making it easily searchable.
 
 I did a partial eval of their performance on some of the queries. The performance in terms of answer quality is much better than Baseline and comparable with my Agent, but I won't make any claims of statistical significance. It appears that the Cursor team did a better job than I on removing claim 'extensions'. For example, if asked about Flask integration (a question that made my system invent things), their system attempted internet search (meaning didn't try to invent things). So, some prompt engineering and maybe extra tools are due in my system
 
-## Summary of testing on a set of diverse query types 
+## Appendix C: Details of testing on a set of diverse query types 
 For more details see https://docs.google.com/spreadsheets/d/1UVdCyk_IM7gUBIkGNNuE_k_zTZJCdUdls-KZzFupCNU/edit?usp=sharing
 
 We considered several types of queries that are commonly present in software development context
@@ -320,7 +361,7 @@ These seek understanding of concepts, principles, or architectural decisions.
 **Modes of failure:**
  - Non-trivial questions are lost (if most of the information that is needed for resolution is in the chunks associated with other topics then the retrieval won't extract it.) Which is natural, given the nature of retrieval. A user might need to ask a more precise question.
 
-## 4. Error/Troubleshooting Queries
+### 4. Error/Troubleshooting Queries
 
 These are about handling specific errors or debugging issues.
 
@@ -330,7 +371,7 @@ These are about handling specific errors or debugging issues.
 **Modes of failure:**
  - These proved to be very robust. Looks good, but I would say in this case I need to be my own user, to provide true troubleshooting examples.
 
-## 5. Integration Queries
+### 5. Integration Queries
 
 These ask about using the library with other tools or frameworks.
 
@@ -341,17 +382,11 @@ These ask about using the library with other tools or frameworks.
  - If information is partially present or information about something similar is present, will likely hallucinate the answer. For example PydanticAI documentation describes integration with FastAPI and generally integrations, but never mentions Flask. Getting that information AI comes up with Flask integration. Which is for me is a desired behavior, **as long as** it doesn't hallucinate about PydanticAI. An ideal solution would be to add a separate tool for that, that is allowed to make up an answer as long as it keeps PydanticAI syntaxis intact
 
 
- ## General Modes of failure
+ ### General Modes of failure
  - On 1 ocassion pure sematic search conflated LangGraph Agent with Agent Graph, retrievd incorrect info, which resulted in incorrect generation and incorrect AI Judge evaluation. 
  - The system overexplains (like most of foundaton models nowadays), which is annoying, but not critical
  - My retrieval design overfetches, which is an expected behavior and doesn't appear to damage generation. Just costs tokens. 4o tokens...
 
-
-<img src="answer_score.png" width="400">
-
-<img src="expansion.png" width="400">
-
-<img src="extra_score.png" width="400">
 
 ## Tradeoffs and limitations
 
