@@ -7,11 +7,9 @@
 
 # Executive Summary
 
-LLMs struggle to access up-to-date AI documentation, especially for non-mainstream libraries. They invent non-existent syntax and produce wrong claims. The libraries evolve very fast, which creates an understandable difficulty for LLMs to keep up.
+LLMs have a hard time answering questions about up-to-date AI documentation, especially for non-mainstream libraries. They invent non-existent syntax and produce wrong claims. The libraries evolve very fast, which creates an understandable difficulty for LLMs to keep up.
 
-I developed an MCP (model context protocol) server that provides current information about rapidly evolving AI libraries. An MCP server is a local server uses a standard protocol to connect with various LLMs and AI coding tools, delivering relevant context when needed.
-
-The solution implements semantic retrieval that either feeds directly into foundation models via MCP or routes to specialized agents. The design tries to optimize token efficiency and offers optional evaluation and tracing capabilities.
+I developed an MCP (model context protocol) server that overcomes this issue. An MCP server is a local server uses a standard protocol to connect with various LLMs and AI coding tools, delivering relevant context when needed. Mine, ultimatelly, connects an LLM to a vector database of a given AI libarary.
 
 In addition to that I implemented a separate Retrieval and QnA agent that improves user query, evaluates them for validity or answers follow-up questions. The agent is expandable and offers more finetuned behavior than an MCP server.
 
